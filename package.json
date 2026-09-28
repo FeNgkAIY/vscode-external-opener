@@ -2,7 +2,7 @@
   "name": "external-opener",
   "displayName": "External Opener",
   "description": "在资源管理器中点击文件时，用配置绑定的外部应用打开，而不是在 VS Code 编辑器中打开。",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "kai",
   "license": "MIT",
   "engines": {

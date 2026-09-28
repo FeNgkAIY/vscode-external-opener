@@ -124,11 +124,33 @@ async function syncBack(uri, entry) {
   }
 }
 
+/**
+ * 用系统默认程序打开本地文件。
+ * 不使用 vscode.env.openExternal(file URI)：Windows 上包含中文等非 ASCII 字符的路径
+ * 会以百分号编码的 URI 传给 Shell，导致“找不到指定文件”。
+ */
+function openWithDefaultApp(file) {
+  let child;
+  if (process.platform === 'win32') {
+    // start 的第一个带引号参数是窗口标题，需要占位的 ""。
+    child = cp.spawn('cmd.exe', ['/d', '/s', '/c', `start "" "${file}"`], {
+      detached: true, stdio: 'ignore', env: cleanEnv(), windowsHide: true, windowsVerbatimArguments: true,
+    });
+  } else {
+    child = cp.spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [file], {
+      detached: true, stdio: 'ignore', env: cleanEnv(),
+    });
+  }
+  child.on('error', (err) => vscode.window.showErrorMessage(`External Opener 启动失败：${err.message}`));
+  watchEarlyExit(child, '系统默认程序');
+  child.unref();
+}
+
 async function launch(uri) {
   const app = findApp(uri);
   const file = await toLocalPath(uri);
   if (!app || app === 'default') {
-    return vscode.env.openExternal(vscode.Uri.file(file)); // 系统默认程序
+    return openWithDefaultApp(file);
   }
   if (app.includes('${file}')) {
     const command = app.split('${file}').join(file);
