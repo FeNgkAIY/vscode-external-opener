@@ -80,15 +80,9 @@ VS Code 没有提供拦截资源管理器点击的 API，本扩展通过接管 �
 2. 将配置中的文件名模式写入 `workbench.editorAssociations`，使对应文件默认使用该编辑器打开。
 3. 编辑器被调用时启动外部应用，随后关闭占位标签页。
 
-## 开发与发布
+## 参与开发
 
-```bash
-npm install
-npx vsce package                          # 本地打包
-git tag v0.1.1 && git push origin v0.1.1  # 推送 tag，GitHub Actions 自动打包并创建 Release
-```
-
-发布前需将 `package.json` 中的 `version` 更新为与 tag 一致的版本号，否则发布流程会失败。
+本地构建、调试与发布流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 许可证
 
