@@ -1,58 +1,95 @@
 # External Opener
 
-在 VS Code 资源管理器中点击文件时，用配置绑定的外部应用（Typora、draw.io、系统默认程序等）打开，而不是在 VS Code 标签页中打开。支持 Remote-SSH / WSL 远程窗口。
+在 VS Code 资源管理器中单击文件时，直接使用你指定的外部应用（如 Typora、draw.io 或系统默认程序）打开，而不是在编辑器标签页中打开。
+
+## 功能
+
+- 按文件名模式（glob）为不同类型的文件绑定不同的外部应用
+- 支持系统默认程序、可执行文件路径和自定义命令模板
+- 打开后自动关闭 VS Code 中的占位标签页
+- 支持 Remote-SSH / WSL 等远程窗口：远程文件会下载到本机临时副本中打开，保存后自动同步回远程
 
 ## 安装
 
-从 [Releases](../../releases) 下载最新的 `external-opener-x.y.z.vsix`，然后执行：
+1. 从 [Releases](https://github.com/FeNgkAIY/vscode-external-opener/releases) 下载最新的 `external-opener-x.y.z.vsix`。
+2. 执行以下命令安装，或在 VS Code 扩展视图中选择 “从 VSIX 安装…”：
 
-```powershell
-code --install-extension external-opener-x.y.z.vsix
-```
+   ```powershell
+   code --install-extension external-opener-x.y.z.vsix
+   ```
 
-## 配置（settings.json）
+3. 重新加载 VS Code 窗口。
+
+## 配置
+
+打开用户设置（`Ctrl+Shift+P` → **Preferences: Open User Settings (JSON)**），添加：
 
 ```jsonc
 "externalOpener.associations": {
-  "*.md": "D:/software/Typora/Typora.exe",                  // 可执行文件，文件路径作为参数
-  "*.pdf": "default",                                        // 系统默认程序
-  "*.{png,jpg}": "C:/Program Files/IrfanView/i_view64.exe",  // 多扩展名
-  "*.docx": "\"C:/Program Files/LibreOffice/program/soffice.exe\" --writer \"${file}\"" // 命令模板
+  // 使用可执行文件打开，文件路径作为唯一参数传入
+  "*.md": "D:/software/Typora/Typora.exe",
+
+  // 使用系统默认程序打开
+  "*.pdf": "default",
+
+  // 一条规则匹配多个扩展名
+  "*.{png,jpg,jpeg}": "C:/Program Files/IrfanView/i_view64.exe",
+
+  // 命令模板：${file} 会被替换为文件路径
+  "*.docx": "\"C:/Program Files/LibreOffice/program/soffice.exe\" --writer \"${file}\""
 },
 "externalOpener.closeTab": true
 ```
 
-- 路径使用 `/` 或 `\\`，不要写单个 `\`。
-- 修改后自动同步到 `workbench.editorAssociations`；也可运行命令 **External Opener: 同步文件关联**。
-- 需要在 VS Code 中查看源码时：右键 → Open With… → Text Editor。
+| 设置项 | 说明 |
+|---|---|
+| `externalOpener.associations` | 文件名模式 → 外部应用。值可以是 `"default"`、可执行文件路径，或包含 `${file}` 的命令模板。 |
+| `externalOpener.closeTab` | 启动外部应用后是否自动关闭占位标签页，默认 `true`。 |
 
-## 原理
+注意事项：
 
-VS Code 不开放拦截资源管理器点击的 API，本插件接管“打开”这一步：
-
-1. 注册 Custom Editor `externalOpener.launcher`（`filenamePattern: "*"`，`priority: "option"`，默认不抢占任何文件）。
-2. 把配置中的 glob 写入用户级 `workbench.editorAssociations`，指向该编辑器。
-3. 编辑器解析时启动外部应用，再通过 Tab API 关闭占位标签页（不能直接 `panel.dispose()`，否则会报 `OverlayWebview has been disposed`）。
-4. 1.5 秒内同一文件只启动一次，避免单击预览后又双击导致重复启动。
+- JSON 中的 Windows 路径请使用 `/` 或 `\\`。
+- 保存设置后，扩展会自动将规则同步到 `workbench.editorAssociations`。如未生效，可运行命令 **External Opener: 同步文件关联**。
+- 如需在 VS Code 中编辑某个已绑定的文件，请右键选择 **Open With…** → **Text Editor**。
 
 ## 远程窗口
 
-插件是 UI 扩展，运行在本机。远程文件会通过 `workspace.fs` 下载到 `%TEMP%/vscode-external-opener/<hash>/`，再用本机应用打开；在外部应用中保存后自动写回远程（状态栏提示）。
+在 Remote-SSH、WSL 等远程窗口中打开文件时，扩展会先将文件复制到本机临时目录（`%TEMP%/vscode-external-opener/`），再用本机应用打开。在外部应用中保存后，改动会自动写回远程，状态栏会显示同步提示。
 
-限制：只复制单个文件，Markdown 中相对路径引用的图片等关联资源不会一起下载；重新点击会用远程最新内容覆盖本地副本。
+当前限制：
 
-## 已知坑
+- 仅复制被打开的单个文件，Markdown 中以相对路径引用的图片等资源不会一并复制。
+- 再次打开同一文件时，本地副本会被远程最新内容覆盖；请避免同时在两端编辑。
 
-- 扩展宿主带有 `ELECTRON_RUN_AS_NODE=1`，直接传给 Typora、draw.io 等 Electron 应用会导致其立即退出；`cleanEnv()` 已清理。
-- 同一文件若已以文本标签页打开，再次点击会切到已有标签页，不会触发外部应用。
-- 卸载插件后，`workbench.editorAssociations` 中残留的 `externalOpener.launcher` 条目需要手动删除。
+## 常见问题
+
+**单击文件后没有调用外部应用，而是切换到了一个已有标签页。**
+该文件此前已以文本编辑器打开。关闭该标签页后重新单击即可。
+
+**外部应用窗口没有出现在前台。**
+Windows 可能会阻止后台启动的程序抢占焦点，请留意任务栏中闪烁的图标。
+
+**卸载扩展后，文件仍无法在 VS Code 中打开。**
+请从用户设置的 `workbench.editorAssociations` 中删除值为 `externalOpener.launcher` 的条目。
+
+## 工作原理
+
+VS Code 没有提供拦截资源管理器点击的 API，本扩展通过接管 “打开文件” 实现该功能：
+
+1. 注册一个适用于所有文件、但默认不启用的自定义编辑器 `externalOpener.launcher`。
+2. 将配置中的文件名模式写入 `workbench.editorAssociations`，使对应文件默认使用该编辑器打开。
+3. 编辑器被调用时启动外部应用，随后关闭占位标签页。
 
 ## 开发与发布
 
 ```bash
 npm install
-npx vsce package          # 本地打包
-git tag v0.1.1 && git push origin v0.1.1   # 推送 tag 后 GitHub Actions 自动打包并创建 Release
+npx vsce package                          # 本地打包
+git tag v0.1.1 && git push origin v0.1.1  # 推送 tag，GitHub Actions 自动打包并创建 Release
 ```
 
-发布前记得同步修改 `package.json` 中的 `version`，与 tag 保持一致。
+发布前需将 `package.json` 中的 `version` 更新为与 tag 一致的版本号，否则发布流程会失败。
+
+## 许可证
+
+[MIT](LICENSE)
